@@ -3,6 +3,9 @@ from typing import List
 
 import nibabel as nib
 import numpy as np
+import argparse
+
+from monai.transforms import RandGaussianNoise
 
 
 class CTScanDataset:
@@ -21,11 +24,10 @@ class CTScanDataset:
         return nib.load(self.file_paths[idx])
 
 
-def add_gaussian_noise(scan: nib.Nifti1Image, std: float = 25.0) -> nib.Nifti1Image:
+def add_gaussian_noise(scan: nib.Nifti1Image, std: float = 25) -> nib.Nifti1Image:
     """Add Gaussian noise to the voxel intensities of a CT scan."""
     data = scan.get_fdata()
-    noise = np.random.normal(0.0, std, size=data.shape)
-    noisy_data = data + noise
+    noisy_data = RandGaussianNoise(prob=1.0, mean=0.0, std=std)(data)  
     return nib.Nifti1Image(noisy_data, scan.affine, scan.header)
 
 
@@ -42,12 +44,18 @@ def augment_dataset_with_noise(dataset: CTScanDataset, output_dir: str, std: flo
         filename = os.path.basename(dataset.file_paths[idx])
         out_path = os.path.join(output_dir, f"noisy_{filename}")
         save_scan(noisy_scan, out_path)
+        print(f"Created noisy scan for {dataset.file_paths[idx]} with std={std}")
+
+if __name__ == "__main__": 
 
 
-__all__ = [
-    "CTScanDataset",
-    "add_gaussian_noise",
-    "save_scan",
-    "augment_dataset_with_noise",
-]
+    parser = argparse.ArgumentParser(description="Augment CT scans with Gaussian noise.")
+    parser.add_argument("data_dir", type=str, help="Directory containing .nii.gz CT scans.")
+    parser.add_argument("output_dir", type=str, help="Directory to save noisy scans.")
+    parser.add_argument("--std", type=float, default=1000.0, help="Standard deviation of Gaussian noise.")
+
+    args = parser.parse_args()
+
+    dataset = CTScanDataset(args.data_dir)
+    augment_dataset_with_noise(dataset, args.output_dir, std=args.std)
 
